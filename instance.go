@@ -42,6 +42,7 @@ func stringify(s *string) string {
 
 // implement sort.Interface
 type sortable []*instance
+
 func (s sortable) Len() int      { return len(s) }
 func (s sortable) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 
