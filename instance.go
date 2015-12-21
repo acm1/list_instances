@@ -1,32 +1,31 @@
 package main
 
 import (
-	"strconv"
-	"strings"
+	"net"
+
 	"github.com/aws/aws-sdk-go/service/ec2"
 )
 
 type instance struct {
 	*ec2.Instance
-	name *string
+	name      string
+	privateIP net.IP
 }
 
-type instanceSlice []*instance
-
-func newInstance(i *ec2.Instance) (ret *instance) {
-	ret = new(instance)
+func newInstance(i *ec2.Instance) (ret instance) {
 	ret.Instance = i
+	ret.privateIP = net.ParseIP(*i.PrivateIpAddress)
 	for _, t := range i.Tags {
 		if *t.Key == "Name" {
-			ret.name = t.Value
+			ret.name = *t.Value
 		}
 	}
-	return
+	return ret
 }
 
 func (i *instance) toRow() []string {
 	return []string{
-		*i.name,
+		i.name,
 		*i.InstanceId,
 		stringify(i.PublicIpAddress),
 		*i.PrivateIpAddress,
@@ -41,39 +40,26 @@ func stringify(s *string) string {
 	return *s
 }
 
-func (i *instance) privateIPOctets() []int {
-	stringOctets := strings.Split(*i.PrivateIpAddress, ".")
-	intOctets := make([]int, 4)
-	for n, o := range stringOctets {
-		x, _ := strconv.ParseInt(o, 10, 32)
-		intOctets[n] = int(x)
-	}
-	return intOctets
-}
+// implement sort.Interface
+type sortable []*instance
+func (s sortable) Len() int      { return len(s) }
+func (s sortable) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 
-func (s instanceSlice) Len() int {
-	return len(s)
-}
-
-func (s instanceSlice) Less(i, j int) bool {
-	octetsI, octetsJ := s[i].privateIPOctets(), s[j].privateIPOctets()
-	if *s[i].name < *s[j].name {
+// Less sorts instances by name and then by private IP address
+func (s sortable) Less(i, j int) bool {
+	if s[i].name < s[j].name {
 		return true
 	}
-	if *s[i].name > *s[j].name {
+	if s[i].name > s[j].name {
 		return false
 	}
-	for n := 0; n < 3; n++ {
-		if octetsI[n] < octetsJ[n] {
+	for n, v := range s[i].privateIP {
+		if v < s[j].privateIP[n] {
 			return true
 		}
-		if octetsI[n] > octetsJ[n] {
+		if v > s[j].privateIP[n] {
 			return false
 		}
 	}
-	return true
-}
-
-func (s instanceSlice) Swap(i, j int) {
-	s[i], s[j] = s[j], s[i]
+	return false
 }

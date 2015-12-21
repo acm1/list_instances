@@ -18,7 +18,7 @@ func perror(err error) {
 	}
 }
 
-func getInstances(region string, instanceChan chan *instance) {
+func getInstances(region string, c chan *instance) {
 	ec2Svc := ec2.New(&aws.Config{Region: &region})
 
 	ec2instances, err := ec2Svc.DescribeInstances(&ec2.DescribeInstancesInput{
@@ -34,41 +34,47 @@ func getInstances(region string, instanceChan chan *instance) {
 	for _, r := range ec2instances.Reservations {
 		for _, i := range r.Instances {
 			inst := newInstance(i)
-			instanceChan <- inst
+			c <- &inst
 		}
 	}
 }
 
-func main() {
-	var instances instanceSlice
-	instanceChan := make(chan *instance)
-	var wg sync.WaitGroup
-
-	for _, r := range REGIONS {
-		wg.Add(1)
-		go func(r string) {
-			getInstances(r, instanceChan)
-			wg.Done()
-		}(r)
-	}
-	go func() {
-		for {
-			i, ok := <-instanceChan
-			if !ok {
-				return
-			}
-			instances = append(instances, i)
-		}
-	}()
-	wg.Wait()
-	close(instanceChan)
-
-	sort.Sort(instances)
-
+func printTable(s []*instance) {
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"Name", "Id", "PublicIP", "PrivateIP", "Key"})
-	for _, i := range instances {
+	for _, i := range s {
 		table.Append(i.toRow())
 	}
 	table.Render()
+}
+
+func main() {
+	var instances []*instance
+	c := make(chan *instance)
+	var wg sync.WaitGroup
+
+	// Query EC2 endpoints in each region in parallel
+	for _, r := range REGIONS {
+		wg.Add(1)
+		go func(r string) {
+			getInstances(r, c)
+			wg.Done()
+		}(r)
+	}
+	// Close channel after all EC2 queries have returned
+	go func() {
+		wg.Wait()
+		close(c)
+	}()
+	// Build up a slice of instances as they are returned to us
+	for {
+		i, ok := <-c
+		if !ok {
+			break
+		}
+		instances = append(instances, i)
+	}
+
+	sort.Sort(sortable(instances))
+	printTable(instances)
 }
