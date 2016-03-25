@@ -7,6 +7,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/ec2"
+    "github.com/aws/aws-sdk-go/aws/session"
 	"github.com/olekukonko/tablewriter"
 )
 
@@ -19,7 +20,8 @@ func perror(err error) {
 }
 
 func getInstances(region string, c chan *instance) {
-	ec2Svc := ec2.New(&aws.Config{Region: &region})
+    sess := session.New(&aws.Config{Region: &region})
+	ec2Svc := ec2.New(sess)
 
 	ec2instances, err := ec2Svc.DescribeInstances(&ec2.DescribeInstancesInput{
 		Filters: []*ec2.Filter{
