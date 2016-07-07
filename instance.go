@@ -2,8 +2,11 @@ package main
 
 import (
 	"net"
+	"os"
+	"sort"
 
 	"github.com/aws/aws-sdk-go/service/ec2"
+	"github.com/olekukonko/tablewriter"
 )
 
 type instance struct {
@@ -40,14 +43,27 @@ func stringify(s *string) string {
 	return *s
 }
 
-// implement sort.Interface
-type sortable []*instance
+type instances []*instance
 
-func (s sortable) Len() int      { return len(s) }
-func (s sortable) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
+func (s instances) printTable() {
+	table := tablewriter.NewWriter(os.Stdout)
+	table.SetHeader([]string{"Name", "Id", "PublicIP", "PrivateIP", "Key"})
+	for _, i := range s {
+		table.Append(i.toRow())
+	}
+	table.Render()
+}
+
+func (s instances) sort() {
+	sort.Sort(s)
+}
+
+// implement sort.Interface
+func (s instances) Len() int      { return len(s) }
+func (s instances) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
 
 // Less sorts instances by name and then by private IP address
-func (s sortable) Less(i, j int) bool {
+func (s instances) Less(i, j int) bool {
 	if s[i].name < s[j].name {
 		return true
 	}

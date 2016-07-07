@@ -1,17 +1,22 @@
 package main
 
 import (
-	"os"
-	"sort"
 	"sync"
 
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/client"
+	"github.com/aws/aws-sdk-go/aws/request"
+	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ec2"
-    "github.com/aws/aws-sdk-go/aws/session"
-	"github.com/olekukonko/tablewriter"
 )
 
-var REGIONS []string = []string{"us-east-1", "eu-west-1", "ap-northeast-1"}
+var regions = []string{
+	"us-east-1",
+	"us-west-2",
+	"eu-west-1",
+	"ap-northeast-1",
+	"ap-northeast-2",
+}
 
 func perror(err error) {
 	if err != nil {
@@ -20,8 +25,14 @@ func perror(err error) {
 }
 
 func getInstances(region string, c chan *instance) {
-    sess := session.New(&aws.Config{Region: &region})
-	ec2Svc := ec2.New(sess)
+	ec2Svc := ec2.New(
+		session.New(
+			request.WithRetryer(
+				aws.NewConfig().WithRegion(region),
+				client.DefaultRetryer{NumMaxRetries: 10},
+			),
+		),
+	)
 
 	ec2instances, err := ec2Svc.DescribeInstances(&ec2.DescribeInstancesInput{
 		Filters: []*ec2.Filter{
@@ -41,22 +52,13 @@ func getInstances(region string, c chan *instance) {
 	}
 }
 
-func printTable(s []*instance) {
-	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Name", "Id", "PublicIP", "PrivateIP", "Key"})
-	for _, i := range s {
-		table.Append(i.toRow())
-	}
-	table.Render()
-}
-
 func main() {
-	var instances []*instance
+	var is instances
 	c := make(chan *instance)
 	var wg sync.WaitGroup
 
 	// Query EC2 endpoints in each region in parallel
-	for _, r := range REGIONS {
+	for _, r := range regions {
 		wg.Add(1)
 		go func(r string) {
 			getInstances(r, c)
@@ -74,9 +76,9 @@ func main() {
 		if !ok {
 			break
 		}
-		instances = append(instances, i)
+		is = append(is, i)
 	}
 
-	sort.Sort(sortable(instances))
-	printTable(instances)
+	is.sort()
+	is.printTable()
 }
