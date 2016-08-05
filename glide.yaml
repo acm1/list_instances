@@ -1,0 +1,13 @@
+package: github.com/acm1/list_instances
+import:
+- package: github.com/aws/aws-sdk-go
+  version: ^1.3.1
+  subpackages:
+  - aws
+  - aws/session
+  - service/ec2
+- package: github.com/olekukonko/tablewriter
+- package: github.com/Sirupsen/logrus
+  version: ^0.10.0
+- package: gopkg.in/alecthomas/kingpin.v2
+  version: ^2.2.2
